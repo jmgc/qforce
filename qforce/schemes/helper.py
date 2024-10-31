@@ -1,3 +1,4 @@
+from ..elements import ATOM_SYM
 from ase.io import read
 
 
@@ -16,4 +17,5 @@ def write_xyz(filename, ids, coords, comment=None):
         comment = ' -- '.join(comment.splitlines())
         fh.write(f'{len(ids)}\n{comment}\n')
         for id, (x, y, z) in zip(ids, coords):
+            id = ATOM_SYM[id]
             fh.write(f"{id}  {x:12.8f} {y:12.8f} {z:12.8f}\n")
