@@ -111,6 +111,7 @@ class Pathways:
         'hessian': 'hessian',
         'addstruct': 'additional',
         'hessian_new': 'hessian_new',
+        'analysis': 'analysis',
         'hessian_charge': ['hessian', 'charge'],
         'hessian_energy': ['hessian', '${idx}_en_conformer'],
         'hessian_gradient': ['hessian', '${idx}_grad_conformer'],
