@@ -1,4 +1,3 @@
-from ase.io import read, write
 from calkeeper import CalculationKeeper, CalculationIncompleteError
 #
 from .initialize import initialize
@@ -6,7 +5,8 @@ from .qm.qm import QM
 from .forcefield.forcefield import ForceField
 from .molecule import Molecule
 from .frequencies import calc_qm_vs_md_frequencies
-from .fit import multi_fit
+from .fit import FitParameters
+from .validateff import ValidateFF
 # from .charge_flux import fit_charge_flux
 from .misc import LOGO
 from .logger import LoggerExit
@@ -31,7 +31,20 @@ def runjob(config, job, ext_q=None, ext_lj=None):
 
     structs = do_all_structs(job, config, qm_interface, mol)
 
-    md_hessian = multi_fit(job.logger, config.terms, mol, structs)
+    fit = FitParameters(mol, equfits=['bond'])
+
+    md_hessian = fit.multi_fit(job.logger, structs)
+
+    res = fit.optimize(job.logger, structs, enonly=True)
+    print("res = ", res)
+
+    mol = fit.mol
+
+    validate = ValidateFF(mol, job.name)
+    andir = job.pathways.getdir("analysis", create=True)
+
+    validate.hessians(andir, structs)
+
     calc_qm_vs_md_frequencies(job, hessian_out, md_hessian)
 
     if (hessian_out.dipole_deriv is not None

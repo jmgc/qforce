@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from pathlib import Path
 import seaborn as sns
 import matplotlib
 import matplotlib.pyplot as plt
@@ -48,7 +47,7 @@ def compute_hessian(coords, mol, displ=1e-5):
 
 
 def _compute_mean_percent_error(qm_freq, md_freq):
-    # 
+    #
     if qm_freq[5] > 300:
         transrot = 5
     else:
@@ -127,7 +126,8 @@ def _write_vibrational_frequencies(folder, name, qm_freq, qm_vec, md_freq, md_ve
         for i, (qm1, md1) in enumerate(zip(qm_vec, md_vec)):
             f.write(f"\nMode {i+transrot+1}\n")
             for qm2, md2 in zip(qm1, md1):
-                f.write("{:>10.5f}{:>10.5f}{:>10.5f}  {:>10.5f}{:>10.5f}{:>10.5f}\n".format(*qm2, *md2))
+                f.write("{:>10.5f}{:>10.5f}{:>10.5f}  {:>10.5f}{:>10.5f}{:>10.5f}\n".format(*qm2,
+                                                                                            *md2))
 
     with open(nmd_file, "w") as nmd:
         nmd.write(f"nmwiz_load {name}_qforce.nmd\n")
@@ -174,7 +174,7 @@ class ValidateFF:
         #
         qm_freq, qm_vec = calc_vibrational_frequencies(qmout.hessian, qmout)
         mm_freq, mm_vec = calc_vibrational_frequencies(mm_hessian, qmout)
-        # 
+        #
         _plot_frequencies(folder, qm_freq, mm_freq)
         _write_vibrational_frequencies(folder, self.name, qm_freq, qm_vec, mm_freq, mm_vec, qmout)
 

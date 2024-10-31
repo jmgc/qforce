@@ -1,18 +1,31 @@
-from sklearn.linear_model import Ridge, Lasso
-import numpy as np
+from copy import deepcopy
 #
-from .molecule.bond_and_angle_terms import MorseBondTerm
+from ase.units import kB as KB
+from ase.units import kJ as KJ
+from ase.units import mol as MOL
+#
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.metrics import mean_squared_error
+import numpy as np
+from scipy.optimize import minimize
 
 
-def multi_fit(logger, config, mol, structs):
+t = 500
+KBT = KB / KJ * MOL * t
+
+
+def compute_AB_matrix(logger, mol, structs):
     """
-    Doing linear/Ridge regression with all energies, forces and hessian terms:
+    Computing the matrices A, B to solve:
+
     Ax = B
 
     A: MM contributions to each e/f/h item by each fitted FF term (shape: n_items x n_fit_terms)
-    B: Total QM e/f/h minus MM contributions from non-fitted terms (like non-bonded) (shape: n_items)
+    B: Total QM e/f/h minus MM contributions from non-fitted terms
+       (like non-bonded) (shape: n_items)
 
     """
+    global KBT
 
     A = []
     B = []
@@ -20,15 +33,6 @@ def multi_fit(logger, config, mol, structs):
 
     # Compute energies for the lowest energy structure, to subtract from other energies
     e_lowest, f_lowest = calc_forces(mol.qm_minimum_coords, mol)
-    # f_lowest *= -1  # convert from force to gradient
-    # f_lowest = f_lowest.reshape(mol.terms.n_fitted_terms+1, mol.topo.n_atoms*3)
-    # qm_force = np.zeros((mol.n_atoms, 3))
-    # A += list(f_lowest[:-1].T)
-    # B += list(qm_force.flatten() - f_lowest[-1])
-    # weights += [1e7]*qm_force.size
-    # A.append(e_lowest[:-1] - e_lowest[:-1])
-    # B.append(0 - e_lowest[-1] + e_lowest[-1])
-    # weights.append(1e7)
 
     logger.info("Calculating the MM hessian matrix elements for all structures ...")
     for weight, qm in structs.hessitr():
@@ -70,13 +74,7 @@ def multi_fit(logger, config, mol, structs):
     # scale for energy structs, grad structs only have weight_f stored, but the ratio is constant!
     factor_e = structs.energy_weight / structs.gradient_weight
 
-    from ase.units import kB as KB
-    from ase.units import kJ as KJ
-    from ase.units import mol as MOL
-
-    t = 500
-    kbt = KB / KJ * MOL * t
-    e_avg = (3*mol.n_atoms-6)*kbt/2
+    e_avg = (3*mol.n_atoms-6)*KBT/2
 
     for weight_f, qmgrad in structs.graditr(select='fit'):
         scale_weight = min(np.exp((e_avg-qmgrad.energy)/e_avg), 1)
@@ -100,18 +98,126 @@ def multi_fit(logger, config, mol, structs):
         B.append(qmgrad.energy - mm_energy[-1] + e_lowest[-1])
         weights.append(weight_e)
 
-    logger.info("Fitting the force field parameters...")
+    return A, B, weights, full_md_hessian_1d
 
-    # reg = Lasso(alpha=1e-4, fit_intercept=False).fit(A, B, sample_weight=weights)
-    # fit = reg.coef_
-    # with mol.terms.add_ignore('charge_flux'):
-    #     for name in mol.terms.keys():
-    #         for term in mol.terms[name]:
-    #             if term.idx < len(fit):
-    #                 term.set_fitparameters(fit)
-    #             if abs(term.fconst) < 1e-4:
-    #                 print('REMOVING:', term, term.fconst)
-    #                 mol.terms.remove_terms_by_name(str(term), term.atomids)
+
+def compute_struct_rmsd_energies(logger, mol, structs):
+    """
+    Doing linear/Ridge regression with only energies:
+    Ax = B
+
+    A: MM contributions to each e/f/h item by each fitted FF term (shape: n_items x n_fit_terms)
+    B: Total QM e/f/h (like non-bonded) (shape: n_items)
+    w: weights
+
+    """
+
+    A = []
+    B = []
+    weights = []
+
+    e_lowest, f_lowest = compute_forces(mol.qm_minimum_coords, mol)
+
+    logger.info("Calculating energies/forces for all additional structures...")
+    for weight_e, qmen in structs.enitr():
+        mm_energy, _ = compute_forces(qmen.coords, mol)
+        A.append(mm_energy - e_lowest)
+        B.append(qmen.energy)
+        weights.append(weight_e)
+
+    # scale for energy structs, grad structs only have weight_f stored, but the ratio is constant!
+    factor_e = structs.energy_weight / structs.gradient_weight
+
+    e_avg = (3*mol.n_atoms-6)*KBT/2
+
+    for weight_f, qmgrad in structs.graditr():
+        scale_weight = min(np.exp((e_avg-qmgrad.energy)/e_avg), 1)
+        weight_f *= scale_weight
+        #
+        weight_e = factor_e * weight_f
+        mm_energy, _ = compute_forces(qmgrad.coords, mol)
+
+        A.append(mm_energy - e_lowest)
+        B.append(qmgrad.energy)
+        weights.append(weight_e)
+    return A, B, weights
+
+
+def compute_struct_rmsd(logger, mol, structs):
+    """
+    Doing linear/Ridge regression with all energies, forces and hessian terms:
+    Ax = B
+
+    A: MM contributions to each e/f/h item by each fitted FF term (shape: n_items x n_fit_terms)
+    B: Total QM e/f/h (like non-bonded) (shape: n_items)
+    w: weights
+
+    """
+
+    A = []
+    B = []
+    weights = []
+
+    e_lowest, f_lowest = compute_forces(mol.qm_minimum_coords, mol)
+    natoms = mol.topo.n_atoms
+
+    logger.info("Calculating the MM hessian matrix elements for all structures ...")
+    for weight, qm in structs.hessitr():
+        # lower triangular
+        qm_hessian = np.copy(qm.hessian)
+        # full matrix
+        full_md_hessian = compute_hessian(qm.coords, mol)
+        # transform in lower triangular matrix
+        md_hessian = (full_md_hessian[np.tril_indices(3*natoms)]
+                      + full_md_hessian[np.triu_indices(3*natoms)])/2.0
+
+        A += list(md_hessian.flatten())
+        B += list(qm_hessian.flatten())
+        weights += [weight]*qm_hessian.size
+
+    logger.info("Calculating energies/forces for all additional structures...")
+    for weight_e, qmen in structs.enitr():
+        mm_energy, _ = compute_forces(qmen.coords, mol)
+        A.append(mm_energy - e_lowest)
+        B.append(qmen.energy)
+        weights.append(weight_e)
+
+    # scale for energy structs, grad structs only have weight_f stored, but the ratio is constant!
+    factor_e = structs.energy_weight / structs.gradient_weight
+
+    e_avg = (3*mol.n_atoms-6)*KBT/2
+
+    for weight_f, qmgrad in structs.graditr():
+        scale_weight = min(np.exp((e_avg-qmgrad.energy)/e_avg), 1)
+        weight_f *= scale_weight
+        #
+        weight_e = factor_e * weight_f
+        mm_energy, mm_force = compute_forces(qmgrad.coords, mol)
+        mm_force *= -1.0  # convert from force to gradient
+
+        A += list(mm_force.flatten())
+        B += list(qmgrad.gradient.flatten())
+        weights += [weight_f]*qmgrad.gradient.size
+
+        A.append(mm_energy - e_lowest)
+        B.append(qmgrad.energy)
+        weights.append(weight_e)
+    return A, B, weights
+
+
+def multi_fit(logger, mol, structs):
+    """
+    Doing linear/Ridge regression with all energies, forces and hessian terms:
+    Ax = B
+
+    A: MM contributions to each e/f/h item by each fitted FF term (shape: n_items x n_fit_terms)
+    B: Total QM e/f/h minus MM contributions from non-fitted terms
+       (like non-bonded) (shape: n_items)
+
+    """
+    A, B, weights, full_md_hessian_1d = compute_AB_matrix(logger, mol, structs)
+
+    logger.info("Fitting the force field parameters...")
 
     reg = Ridge(alpha=1e-6, fit_intercept=False).fit(A, B, sample_weight=weights)
     fit = reg.coef_
@@ -125,35 +231,19 @@ def multi_fit(logger, config, mol, structs):
 
     full_md_hessian_1d = np.sum(full_md_hessian_1d * fit, axis=1)
 
-    # nqmgrads = sum(1 for _ in structs.graditr())
-    #
-    # if nqmgrads > 0:
-    #     full_qm_energies = np.array(full_qm_energies)
-    #     print(full_qm_energies.shape)
-    #     full_mm_energies = np.array(full_mm_energies)
-    #     print(full_mm_energies.shape)
-    #     full_qm_forces = np.array(full_qm_forces)
-    #     print(full_qm_forces.shape)
-    #     full_mm_forces = np.array(full_mm_forces)
-    #     print(full_mm_forces.shape)
-    #     full_mm_forces = np.sum(full_mm_forces * fit, axis=2)
-    #     full_mm_energies = np.sum(full_mm_energies * fit, axis=1)
-    #
-    #     for struct in range(nqmgrads):
-    #         print('struct', struct)
-    #         print('QM:\n', full_qm_energies[struct], '\n', full_qm_forces[struct])
-    #         print('MM:\n', full_mm_energies[struct], '\n', full_mm_forces[struct].reshape((mol.n_atoms, 3)))
-    #         print('\n')
-    #
-    # err = full_md_hessian_1d-qm.hessian
-    # mae = np.abs(err).mean()
-    # rmse = (err**2).mean()**0.5
-    # max_err = np.max(np.abs(err))
-    # print('mae:', mae*0.2390057361376673)
-    # print('rmse:', rmse*0.2390057361376673)
-    # print('max_err:', max_err*0.2390057361376673)
-
     return full_md_hessian_1d
+
+
+def compute_rmsd(logger, mol, structs, enonly=True):
+    # do force fitting with current equilibrium structure
+    # return multi_fit(logger, mol, structs)
+    # compute rmsd
+    if enonly is True:
+        A, B, weights = compute_struct_rmsd_energies(logger, mol, structs)
+    else:
+        A, B, weights = compute_struct_rmsd(logger, mol, structs)
+    logger.info("computing the RMSD...")
+    return np.sqrt(mean_squared_error(A, B, sample_weight=weights))
 
 
 def calc_hessian(coords, mol):
@@ -174,7 +264,8 @@ def calc_hessian(coords, mol):
                 _, f_minus = calc_forces(coords, mol)
                 coords[a][xyz] += 1e-5
                 diff = - (f_plus - f_minus) / 2e-5
-                full_hessian[a*3+xyz] = diff.reshape(mol.terms.n_fitted_terms+1, 3*mol.topo.n_atoms).T
+                full_hessian[a*3+xyz] = diff.reshape(mol.terms.n_fitted_terms+1,
+                                                     3*mol.topo.n_atoms).T
     return full_hessian
 
 
@@ -192,3 +283,137 @@ def calc_forces(coords, mol):
         term.do_fitting(coords, energies, force)
 
     return energies, force
+
+
+def compute_hessian(coords, mol):
+    """
+    Scope:
+    -----
+    Perform displacements to calculate the MD hessian numerically.
+    """
+    full_hessian = np.zeros((3*mol.topo.n_atoms, 3*mol.topo.n_atoms), dtype=float)
+
+    with mol.terms.add_ignore('charge_flux'):
+        for a in range(mol.topo.n_atoms):
+            for xyz in range(3):
+                coords[a][xyz] += 1e-5
+                _, f_plus = compute_forces(coords, mol)
+                coords[a][xyz] -= 2e-5
+                _, f_minus = compute_forces(coords, mol)
+                coords[a][xyz] += 1e-5
+                diff = - (f_plus - f_minus) / 2e-5
+                full_hessian[a*3+xyz] = diff.flatten()
+    return full_hessian
+
+
+def compute_forces(coords, mol):
+    """
+    Scope:
+    ------
+    For each displacement, calculate the forces from all terms.
+
+    """
+    energy = 0.0
+    force = np.zeros((mol.topo.n_atoms, 3))
+
+    for term in mol.terms:
+        energy += term.do_force(coords, force)
+
+    return energy, force
+
+
+class FitParameters:
+
+    def __init__(self, mol, equfits=['bond']):
+        self.equfits = equfits
+        self.mol = deepcopy(mol)
+        self.parameters = self._get_fitparameters(equfits)
+
+    def _get_fitparameters(self, equfits):
+
+        parameters = {}
+
+        for termcls in equfits:
+
+            for term in self.mol.terms[termcls]:
+                constants = term.constants()
+                for constant in constants:
+                    values = parameters.get(constant)
+                    if values is None:
+                        parameters[constant] = [term]
+                    else:
+                        values.append(term)
+
+        with self.mol.terms.add_ignore(equfits):
+            for term in self.mol.terms[termcls]:
+                constants = term.constants()
+                for constant in constants:
+                    values = parameters.get(constant)
+                    if values is not None:
+                        values.append(term)
+
+        for terms in self._group_averaged_parameters(equfits).values():
+            if len(terms) == 1:
+                continue
+
+            # assume that its just one constant!!!!
+            constants = [term.constants()[0] for term in terms]
+            start = constants[0]
+
+            values = []
+            for constant in constants:
+                values += parameters[constant]
+                del parameters[constant]
+
+            parameters[start] = values
+
+        return parameters
+
+    def _group_averaged_parameters(self, equfits):
+        # not sure if it should be done or not
+        sorted_terms = {}
+
+        for termcls in equfits:
+            for term in self.mol.terms[termcls]:
+                name = str(term)
+                values = sorted_terms.get(name)
+                if values is None:
+                    sorted_terms[name] = [term]
+                else:
+                    values.append(term)
+
+        return sorted_terms
+
+    def multi_fit(self, logger, structs):
+        return multi_fit(logger, self.mol, structs)
+
+    def optimize(self, logger, structs, ncircle=5, enonly=True):
+
+        # assume ordered dictionaries!
+        names = [key for key in self.parameters.keys()]
+
+        def _helper(values):
+            values = {name: value for name, value in zip(names, values)}
+            for terms in self.parameters.values():
+                for term in terms:
+                    term.update_constants(values)
+            return compute_rmsd(logger, self.mol, structs, enonly=enonly)
+        # assumes standard bond and angle terms!
+        start_values = []
+        for terms in self.parameters.values():
+            start_values.append(terms[0].equ)
+        #
+        multi_fit(logger, self.mol, structs)
+
+        start_values = []
+        for terms in self.parameters.values():
+            start_values.append(terms[0].equ + 1.0)
+
+        logger.info(f"start_values = {start_values}")
+
+        for _ in range(ncircle):
+            # do first multi_fit
+            res = minimize(_helper, start_values)  # method='Powell')
+            start_values = res.x
+            multi_fit(logger, self.mol, structs)
+        return res
