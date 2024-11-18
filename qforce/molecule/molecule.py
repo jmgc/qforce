@@ -9,11 +9,12 @@ from .non_bonded import NonBonded
 
 class Molecule(object):
 
-    def __init__(self, job, config):
+    def __init__(self, job, config, qm_interface):
         self.name = job.name
         self.job_dir = job.dir
         self.charge = config.qm.charge
         self.multiplicity = config.qm.multiplicity
+        self.hash = qm_interface.softwares['software'].hash(self.charge, self.multiplicity)
 
         self.coords = None
         self.bond_orders = None

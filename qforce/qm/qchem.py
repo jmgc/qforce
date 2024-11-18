@@ -87,7 +87,7 @@ class QChemCalculator(Calculator):
         return cls(config['qchemexe'])
 
     def _commands(self, filename, basename, ncores):
-        return [f'{self.qchemexe} -nt {ncores} {filename} > {basename}.log']
+        return [f'{self.qchemexe} -nt {ncores} {filename} > {basename}.out']
 
 
 class ReadQChem(ReadABC):
@@ -245,6 +245,7 @@ class ReadQChem(ReadABC):
         coords = None
         atomids = None
         gradient = None
+
         with open(out_file, "r", encoding='utf-8') as file:
             for line in file:
                 if 'Standard Nuclear Orientation' in line:
@@ -274,7 +275,7 @@ class ReadQChem(ReadABC):
                     break
 
         if energy is None or coords is None or gradient is None:
-            raise ValueError("Could not find energy in file!")
+            raise ValueError(f"Could not find energy in file:\n{out_file}")
         energy = energy * Hartree * mol / kJ
         gradient = np.array(gradient) * Hartree * mol / kJ / Bohr
 

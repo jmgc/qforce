@@ -1,6 +1,7 @@
 import os
 from shutil import copy2 as copy
 import numpy as np
+from itertools import tee
 #
 from .helper import coords_ids_iter, write_xyz
 from .creator import CalculationStorage, CustomStructureCreator
@@ -12,17 +13,17 @@ class XTBMolecularDynamics(CustomStructureCreator):
     _user_input = """
     weight = 1 :: float
     # What to compute:
-    #   none: do not do metadynamics, default
+    #   none: do not do metadynamics
     #     en: do metadynamics and do single point energy calculations
-    #   grad: do metadynamics and do single point energy+ gradient calculations
+    #   grad: do metadynamics and do single point energy+ gradient calculations, default
     #
-    compute = none :: str :: [none, en, grad]
+    compute = grad :: str :: [none, en, grad]
     # Number of frames used for fitting
-    n_fit = 100 :: int
+    n_fit = 200 :: int
     # Number of frames used for validation
-    n_valid = 0 :: int
+    n_valid = 200 :: int
     # temperature (K)
-    temp = 800 :: float :: >0
+    temp = 300 :: float :: >0
     # interval for trajectory printout (fs)
     dump = 500.0 :: float :: >0
     # time step for propagation (fs)
@@ -79,7 +80,8 @@ class XTBMolecularDynamics(CustomStructureCreator):
                 fh.write('$end\n')
 
             with open(folder / 'xtb.inp', 'w') as fh:
-                fh.write("xtb xtb.xyz --input md.inp --md --ceasefiles > md.log ")
+                fh.write(f'xtb xtb.xyz --input md.inp --md --chrg {qm.config.charge} ' 
+                         f'--uhf {qm.config.multiplicity - 1}  --ceasefiles > md.log ')
 
             calcs.append(calc)
         #
@@ -113,6 +115,14 @@ class XTBMolecularDynamics(CustomStructureCreator):
             filename = mdrun['file']
 
             data = coords_ids_iter(filename, f':{self.total_frame_dist[i]}')
+
+            data_copy, data = tee(data)
+            n_items = len(list(data_copy))
+
+            if n_items != self.total_frame_dist[i]:
+                raise ValueError('The xTB-MD frame count is wrong for the following folder. '
+                                 f'Check simulation corresponding to:\n{filename}')
+
             folder = parent / f'{i}_{self.compute}_structs'
             self._calcs.append(ComputeCls(folder, self.weight, data))
 

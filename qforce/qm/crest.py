@@ -171,8 +171,11 @@ class ReadCrest(ReadABC):
 
         b_orders = [[0 for _ in range(n_atoms)] for _ in range(n_atoms)]
 
-        file = np.loadtxt(out_file)
-        for x, y, bo in file:
+        out = np.loadtxt(out_file)
+        if len(out.shape) == 1:
+            out = [out]
+
+        for x, y, bo in out:
             b_orders[int(x) - 1][int(y) - 1] = bo
             b_orders[int(y) - 1][int(x) - 1] = bo
 
@@ -201,15 +204,18 @@ class WriteCrest(WriteABC):
         base, filename = os.path.split(name)
         # Given that the xTB input has to be given in the command line.
         # We create the xTB command template here.
-        cmd = f'crest {job_name}_input.xyz --chrg {settings.charge} ' \
-              f'--uhf {settings.multiplicity - 1} ' \
-              f'{self.config.xtb_command} -T {settings.n_proc} -alpb water\n'
+
+        cmd = f'crest {job_name}_input.xyz --chrg {settings.charge} --uhf {settings.multiplicity - 1} ' \
+              f'{self.config.xtb_command} -T {settings.n_proc} -alpb water\n' \
+              f'xtb crest_conformers.xyz --chrg {settings.charge} --uhf {settings.multiplicity - 1} ' \
+              f'{self.config.xtb_command} -T {settings.n_proc} -alpb water\n' \
+
         # Write the hessian.inp which is the command line input
         file.write(cmd)
         # Write the coordinates, which is the standard xyz file.
         mol = Atoms(positions=coords, numbers=atnums)
         write(f'{base}/{job_name}_input.xyz', mol, plain=True,
-              comment=cmd)
+              comment='CREST input structure')
 
     def hessian(self, file, job_name, settings, coords, atnums):
         """ Write the input file for hessian and charge calculation.

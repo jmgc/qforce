@@ -1,10 +1,10 @@
-from ase.io import read, write
 from calkeeper import CalculationKeeper, CalculationIncompleteError
 #
 from .initialize import initialize
 from .qm.qm import QM
 from .forcefield.forcefield import ForceField
 from .molecule import Molecule
+from .molecule.bond_and_angle_terms import get_bond_dissociation_energies
 from .frequencies import calc_qm_vs_md_frequencies
 from .fit import multi_fit
 # from .charge_flux import fit_charge_flux
@@ -19,8 +19,8 @@ def runjob(config, job, ext_q=None, ext_lj=None):
 
     qm_interface = QM(job, config.qm)
     ff_interface = ForceField.implemented_md_software[config.ff.output_software]
-
-    mol = Molecule(job, config)
+    print()
+    mol = Molecule(job, config, qm_interface)
 
     do_crest(job, qm_interface, mol)
 
@@ -31,7 +31,11 @@ def runjob(config, job, ext_q=None, ext_lj=None):
 
     structs = do_all_structs(job, config, qm_interface, mol)
 
+    multi_fit(job.logger, config.terms, mol, structs)
+    update_morse_term(job, mol)
     md_hessian = multi_fit(job.logger, config.terms, mol, structs)
+    update_morse_term(job, mol)
+
     calc_qm_vs_md_frequencies(job, hessian_out, md_hessian)
 
     if (hessian_out.dipole_deriv is not None
@@ -46,6 +50,14 @@ def runjob(config, job, ext_q=None, ext_lj=None):
     print_outcome(job.logger, job.dir, config.ff.output_software)
 
     return mol
+
+
+def update_morse_term(job, mol):
+    bond_dissociation_energies = get_bond_dissociation_energies(job.md_data, mol)
+    for term in mol.terms['bond']:
+        if str(term).startswith('Morse'):
+            e_dis = bond_dissociation_energies[term.atomids[0], term.atomids[1]]
+            term.equ[1] = (term.fconst /(2*e_dis))**0.5
 
 
 def do_hessian(qm_interface, mol):

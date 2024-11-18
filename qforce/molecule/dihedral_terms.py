@@ -386,7 +386,6 @@ class DihedralTerms(TermFactory):
 
                 pt_type = sorted([topo.types[a1], topo.types[2]])
                 pt_type = f'{pt_type[0]}_{pt_type[1]}'
-                print([a1, a1_1, a1_2, a2, a2_1, a2_2], pt_type)
                 add_term('pitorsion', topo, [a1, a1_1, a1_2, a2, a2_1, a2_2], 0, pt_type)
 
 

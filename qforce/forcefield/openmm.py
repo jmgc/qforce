@@ -26,7 +26,7 @@ class OpenMM(ForcefieldSettings):
             'dihedral/rigid': True,
             'dihedral/improper': True,
             'dihedral/inversion': False,
-            'dihedral/pitorsion': True,
+            'dihedral/pitorsion': False,
 
             'non_bonded': False,
             'local_frame': False,
@@ -40,7 +40,7 @@ class OpenMM(ForcefieldSettings):
         self.write_pdb(directory, coords, box)
 
     def write_pdb(self, directory, coords, box):
-        with open(f'{directory}/gas.pdb', 'w') as file:
+        with open(f'{directory}/{self.ff.mol_name}.pdb', 'w') as file:
             file.write(f'CRYST1{box[0]:9.3f}{box[1]:9.3f}{box[2]:9.3f}{90.0:7.2f}{90.0:7.2f}{90.0:7.2f} P 1\n')
             file.write('MODEL     1\n')
 
@@ -115,8 +115,7 @@ class OpenMM(ForcefieldSettings):
         ids = term.atomids
         equ = str(round(term.equ[0] * 0.1, 9))
         k = str(round(term.fconst * 100, 3))
-        e_dis = self.ff.bond_dissociation_energies[ids[0], ids[1]]
-
+        e_dis = str(round(term.fconst/(2*term.equ[1]**2), 8))
         ET.SubElement(writer, 'Bond', {'p1': str(ids[0]), 'p2': str(ids[1]), 'param1': equ, 'param2': k,
                                        'param3': str(e_dis)})
 
@@ -309,8 +308,8 @@ class OpenMM(ForcefieldSettings):
 
     def write_cross_dihed_bond_term(self, term, writer):
         ids = term.atomids
-        k = str(round(term.fconst, 7) * 10)
-        equ = str(round(term.equ[0], 8) * 0.1)
+        k = str(round(term.fconst * 10, 7))
+        equ = str(round(term.equ[0] * 0.1, 8))
         n = str(term.equ[1])
         phi0 = str(round(term.equ[2], 8))
 

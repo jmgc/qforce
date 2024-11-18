@@ -76,7 +76,11 @@ def multi_fit(logger, config, mol, structs):
 
     t = 500
     kbt = KB / KJ * MOL * t
-    e_avg = (3*mol.n_atoms-6)*kbt/2
+
+    if mol.n_atoms == 2:
+        e_avg = (3*mol.n_atoms-5)*kbt/2
+    else:
+        e_avg = (3*mol.n_atoms-6)*kbt/2
 
     for weight_f, qmgrad in structs.graditr(select='fit'):
         scale_weight = min(np.exp((e_avg-qmgrad.energy)/e_avg), 1)
@@ -104,17 +108,32 @@ def multi_fit(logger, config, mol, structs):
 
     # reg = Lasso(alpha=1e-4, fit_intercept=False).fit(A, B, sample_weight=weights)
     # fit = reg.coef_
-    # with mol.terms.add_ignore('charge_flux'):
-    #     for name in mol.terms.keys():
-    #         for term in mol.terms[name]:
-    #             if term.idx < len(fit):
-    #                 term.set_fitparameters(fit)
-    #             if abs(term.fconst) < 1e-4:
-    #                 print('REMOVING:', term, term.fconst)
-    #                 mol.terms.remove_terms_by_name(str(term), term.atomids)
+    #
+    # kept = set()
+    # removed = set()
+    # for term in list(mol.terms):
+    #     if term.idx < len(fit):
+    #         term.set_fitparameters(fit)
+    #         if abs(term.fconst) < 1e-4:
+    #             print('REMOVING:', term, term.fconst)
+    #             removed.add(term.idx)
+    #             mol.terms.remove_terms_by_name(str(term), term.atomids)
+    #         else:
+    #             kept.add(term.idx)
+    #
+    # A = np.array(A)[:, list(kept)]
+    # full_md_hessian_1d = np.array(full_md_hessian_1d)[:, list(kept)]
+    # removed = np.array(list(removed))
+    #
+    # for term in mol.terms:
+    #     move = sum(term.idx > removed)
+    #     term.idx -= move
 
-    reg = Ridge(alpha=1e-6, fit_intercept=False).fit(A, B, sample_weight=weights)
+    reg = Lasso(alpha=1e-6, fit_intercept=False).fit(A, B, sample_weight=weights)
     fit = reg.coef_
+
+    # reg = Ridge(alpha=1e-6, fit_intercept=False).fit(A, B, sample_weight=weights)
+    # fit = reg.coef_
 
     logger.info("Done!\n")
 
@@ -125,17 +144,12 @@ def multi_fit(logger, config, mol, structs):
 
     full_md_hessian_1d = np.sum(full_md_hessian_1d * fit, axis=1)
 
-    # nqmgrads = sum(1 for _ in structs.graditr())
-    #
+    # nqmgrads = sum(1 for _ in structs.graditr(select='fit'))
     # if nqmgrads > 0:
     #     full_qm_energies = np.array(full_qm_energies)
-    #     print(full_qm_energies.shape)
     #     full_mm_energies = np.array(full_mm_energies)
-    #     print(full_mm_energies.shape)
     #     full_qm_forces = np.array(full_qm_forces)
-    #     print(full_qm_forces.shape)
     #     full_mm_forces = np.array(full_mm_forces)
-    #     print(full_mm_forces.shape)
     #     full_mm_forces = np.sum(full_mm_forces * fit, axis=2)
     #     full_mm_energies = np.sum(full_mm_energies * fit, axis=1)
     #
@@ -144,14 +158,14 @@ def multi_fit(logger, config, mol, structs):
     #         print('QM:\n', full_qm_energies[struct], '\n', full_qm_forces[struct])
     #         print('MM:\n', full_mm_energies[struct], '\n', full_mm_forces[struct].reshape((mol.n_atoms, 3)))
     #         print('\n')
-    #
-    # err = full_md_hessian_1d-qm.hessian
-    # mae = np.abs(err).mean()
-    # rmse = (err**2).mean()**0.5
-    # max_err = np.max(np.abs(err))
-    # print('mae:', mae*0.2390057361376673)
-    # print('rmse:', rmse*0.2390057361376673)
-    # print('max_err:', max_err*0.2390057361376673)
+
+    err = full_md_hessian_1d-qm.hessian
+    mae = np.abs(err).mean()
+    rmse = (err**2).mean()**0.5
+    max_err = np.max(np.abs(err))
+    print('mae:', mae*0.2390057361376673)
+    print('rmse:', rmse*0.2390057361376673)
+    print('max_err:', max_err*0.2390057361376673)
 
     return full_md_hessian_1d
 

@@ -12,7 +12,7 @@ class Computations_(CustomStructureCreator):
     _user_input = """
     energy_element_weights = 15000 :: float
     gradient_element_weights = 100 :: float
-    hessian_element_weights = 0.1 :: float
+    hessian_element_weights = 1 :: float
 
     hessian_weight = 1 :: float
     dihedral_weight = 1 :: float
@@ -139,7 +139,7 @@ class Computations_(CustomStructureCreator):
         for creator in self.creators.values():
             for calctype in [creator.enouts(), creator.gradouts(), creator.hessouts()]:
                 if calctype:
-                    argmin = np.argmin((out.energy for out in calctype))
+                    argmin = np.argmin(list(out.energy for out in calctype))
                     lowest = calctype[argmin].energy
                     if lowest < minimum:
                         minimum = lowest

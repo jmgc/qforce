@@ -47,9 +47,11 @@ class Topology(object):
             # add bonds
             for j_idx, j_elem in enumerate(self.atomids):
                 b_order = self.bond_order_matrix[i_idx, j_idx]
-                if b_order > 0.3:
+                if b_order > 0.4:
                     id1, id2 = sorted([i_elem, j_elem])
                     b_order_half_rounded = np.round(b_order*2)/2
+                    if b_order_half_rounded == 0.5:
+                        b_order_half_rounded = 1.0
                     vec = self.coords[i_idx] - self.coords[j_idx]
                     dist = np.sqrt((vec**2).sum())
                     self.node(i_idx)['neighs'].append(j_idx)

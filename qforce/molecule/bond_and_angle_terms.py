@@ -185,3 +185,75 @@ class UreyBradleyTerm(TermBase):
 
     def write_ff_header(self, software, writer):
         return software.write_urey_bradley_header(writer)
+
+
+def get_bond_dissociation_energies(md_data, mol):
+    dissociation_energies = {}
+
+    bde_dict = read_bond_dissociation_energy_csv(md_data)
+
+    for a1, a2, props in mol.topo.graph.edges(data=True):
+        a1, a2 = sorted((a1, a2))
+        print(a1, a2, )
+        if props['type'] not in bde_dict:
+            raise ValueError('Morse potential chosen, but dissociation energy not known for this atom number pair '
+                             f'with the bond order in parenthesis: {props["type"]}. '
+                             'You can add this too csv file in the data directory')
+
+        neighs1 = [edge[2]['type'] for edge in mol.topo.graph.edges(a1, data=True)]
+        neighs2 = [edge[2]['type'] for edge in mol.topo.graph.edges(a2, data=True)]
+        e_dis, n_matches = choose_bond_type(bde_dict[props['type']], neighs1, neighs2)
+
+        if mol.atomids[a1] == mol.atomids[a2]:
+            e_dis2, n_matches2 = choose_bond_type(bde_dict[props['type']], neighs1, neighs2, 1, 0)
+            if n_matches2 > n_matches:
+                e_dis = e_dis2
+
+        dissociation_energies[(a1, a2)] = float(e_dis)
+    return dissociation_energies
+
+def read_bond_dissociation_energy_csv(md_data):
+    bde_dict = {}
+
+    with open(f'{md_data}/bond_dissociation_energy.csv', 'r') as file:
+        file.readline()
+        for line in file:
+            a1, a2, b_order, a1_neighs, a2_neighs, de = line.split(',')[:6]
+            a1_neighs = read_bond_dissociation_neighbors(a1, a1_neighs)
+            a2_neighs = read_bond_dissociation_neighbors(a2, a2_neighs)
+            name = f'{a1}({float(b_order):.1f}){a2}'
+
+            if name in bde_dict:
+                bde_dict[name].append((a1_neighs, a2_neighs, de))
+            else:
+                bde_dict[name] = [(a1_neighs, a2_neighs, de)]
+
+    return bde_dict
+
+
+def choose_bond_type(bde_list, neighs1, neighs2, ndx1=0, ndx2=1):
+    highest_match = 0
+    match_type = None
+
+    for bde_type in bde_list:
+        current_sum1 = sum(typ in neighs1 for typ in bde_type[ndx1])
+        current_sum2 = sum(typ in neighs2 for typ in bde_type[ndx2])
+        current_sum = current_sum1 + current_sum2
+
+        if current_sum > highest_match:
+            highest_match = current_sum
+            match_type = bde_type
+        elif highest_match == 0 and bde_type[0] == [] and bde_type[1] == []:
+            match_type = bde_type
+
+    return match_type[2], highest_match
+
+
+def read_bond_dissociation_neighbors(a, neighs):
+    neighs_formatted = []
+    if neighs != '*' and neighs != '':
+        neighs = neighs.split()
+        for neigh in neighs:
+            a_neigh, bo_neigh = neigh.split('_')
+            neighs_formatted.append(f'{min(a, a_neigh)}({float(bo_neigh):.1f}){max(a, a_neigh)}')
+    return neighs_formatted

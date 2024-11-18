@@ -2,7 +2,7 @@ import numpy as np
 from itertools import product
 #
 from .baseterms import TermBase
-from ..forces import get_dist, get_angle
+from ..forces import get_dist, get_angle, get_dihed
 from ..forces import (calc_cross_bond_bond, calc_cross_bond_angle, calc_cross_bond_cos_angle, calc_cross_angle_angle,
                       calc_cross_cos_angle_angle, calc_cross_dihed_angle, calc_cross_dihed_bond,
                       calc_cross_cos_cube_dihed_angle, calc_cross_cos_cube_dihed_bond,
@@ -337,6 +337,16 @@ class CrossDihedBondTerm(TermBase):
 
             # rigid
             for atoms in atoms_comb:
+                is_rigid = False
+                if (central['order'] >= 1.75 or central["in_ring3"]  # double bond or 3-member ring
+                        or (central['in_ring'] and central['order'] >= 1.25)  # in ring and conjugated
+                        or (all([topo.node(a)['n_ring'] > 1 for a in [a2, a3]]) and  # in many rings
+                            any([topo.node(a)['n_ring'] > 1 for a in a1s]) and
+                            any([topo.node(a)['n_ring'] > 1 for a in a4s]))
+                        or (central['in_ring'] and check_if_in_a_fully_planar_ring(topo, a2, a3))
+                        or topo.all_rigid):
+                    is_rigid = True
+
                 a1, a2, a3, a4 = atoms
                 b12 = topo.edge(a1, a2)["vers"]
                 b23 = topo.edge(a2, a3)["vers"]
@@ -374,10 +384,13 @@ class CrossDihedBondTerm(TermBase):
 
                     db_type = f'{d_type}-{b_type}-{n_shared}{connect}'
 
-                    cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 4, np.pi], f'{db_type}-4'))
-                    cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 3, 0], f'{db_type}-3'))
-                    cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 2, np.pi], f'{db_type}-2'))
-                    cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 1, 0], f'{db_type}-1'))
+                    if is_rigid:
+                        cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 2, np.pi], f'{db_type}'))
+                    else:
+                        cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 4, np.pi], f'{db_type}-4'))
+                        cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 3, 0], f'{db_type}-3'))
+                        cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 2, np.pi], f'{db_type}-2'))
+                        cross_dihed_bond_terms.append(cls([a1, a2, a3, a4, a5, a6], [dist, 1, 0], f'{db_type}-1'))
         return cross_dihed_bond_terms
 
     def write_forcefield(self, software, writer):
@@ -450,6 +463,16 @@ class CrossDihedAngleTerm(TermBase):
                           a4s) if d[0] != d[-1]]
 
             for atoms in atoms_comb:
+                is_rigid = False
+                if (central['order'] >= 1.75 or central["in_ring3"]  # double bond or 3-member ring
+                        or (central['in_ring'] and central['order'] >= 1.25)  # in ring and conjugated
+                        or (all([topo.node(a)['n_ring'] > 1 for a in [a2, a3]]) and  # in many rings
+                            any([topo.node(a)['n_ring'] > 1 for a in a1s]) and
+                            any([topo.node(a)['n_ring'] > 1 for a in a4s]))
+                        or (central['in_ring'] and check_if_in_a_fully_planar_ring(topo, a2, a3))
+                        or topo.all_rigid):
+                    is_rigid = True
+
                 a1, a2, a3, a4 = atoms
                 b12 = topo.edge(a1, a2)["vers"]
                 b23 = topo.edge(a2, a3)["vers"]
@@ -480,10 +503,13 @@ class CrossDihedAngleTerm(TermBase):
 
                     da_type = f'{d_type}-{a_type}-{n_shared}-{connect}'
 
-                    cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 4, np.pi], f'{da_type}-4'))
-                    cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 3, 0], f'{da_type}-3'))
-                    cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 2, np.pi], f'{da_type}-2'))
-                    cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 1, 0], f'{da_type}-1'))
+                    if is_rigid:
+                        cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 2, np.pi], f'{da_type}'))
+                    else:
+                        cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 4, np.pi], f'{da_type}-4'))
+                        cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 3, 0], f'{da_type}-3'))
+                        cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 2, np.pi], f'{da_type}-2'))
+                        cross_dihed_angle_terms.append(cls([a1, a2, a3, a4, a5, a6, a7], [theta, 1, 0], f'{da_type}-1'))
 
         return cross_dihed_angle_terms
 
@@ -677,3 +703,21 @@ class CrossCosCubeDihedAngleAngleTerm(CrossDihedAngleAngleTerm):
 #
 #     def write_ff_header(self, software, writer):
 #         return software.write_cross_dihed_dihed_header(writer)
+
+def check_if_in_a_fully_planar_ring(topo, a2, a3):
+    rings = [r for r in topo.rings if set([a2, a3]).issubset(set(r))]
+    for ring in rings:
+        is_planar = []
+        ring_graph = topo.graph.subgraph(ring)
+        for edge in ring_graph.edges:
+            a1 = [n for n in list(ring_graph.neighbors(edge[0])) if n not in edge][0]
+            a4 = [n for n in list(ring_graph.neighbors(edge[1])) if n not in edge][0]
+            dihed = [a1, edge[0], edge[1], a4]
+
+            is_planar.append(get_dihed(topo.coords[dihed])[0] < 0.43625)  # < 25 degrees
+        if all(is_planar):
+            all_planar = True
+            break
+    else:
+        all_planar = False
+    return all_planar

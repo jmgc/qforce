@@ -221,7 +221,7 @@ class ReadABC(ABC):
     def scan(self, ):
         ...
 
-    def scan_torsiondrive(self, log_file):
+    def scan_torsiondrive(self, config, xyz):
         '''Read the TorsionDrive output.
 
         Parameters
@@ -244,8 +244,8 @@ class ReadABC(ABC):
             A dictionary with key in charge_method and the value to be a
             list of float of the size of n_atoms.
         '''
-        folder, _ = os.path.split(log_file)
-        frames = read(os.path.join(folder, 'scan.xyz'), index=':', format='extxyz')
+
+        frames = read(xyz, index=':', format='extxyz')
         n_atoms = len(frames[0])
         energy_list = []
         coord_list = []

@@ -84,19 +84,36 @@ class Terms(MappingIterator):
         self.average_equivalent_terms()
 
     def average_equivalent_terms(self):
-        equ_list = [[] for _ in range(self.n_fitted_terms)]
+        main_terms = {}
+        main_equs = {}
 
-        for term in self:
-            equ_list[term.idx].append(term.equ)
-
-        for i in range(self.n_fitted_terms):
-            if equ_list[i][0] is not None:
-                equ_list[i] = np.min(equ_list[i], axis=0)
+        for term in list(self['bond']) + list(self['angle']):
+            if isinstance(term.equ, list):
+                equ = term.equ[0]
             else:
-                equ_list[i] = None
+                equ = term.equ
+            if term.idx in main_equs:
+                main_equs[term.idx].append(equ)
+            else:
+                main_equs[term.idx] = [equ]
+
+            main_terms[equ] = term.idx
+
+        for idx, vals in main_equs.items():
+            main_equs[idx] = np.min(vals)
 
         for term in self:
-            term.equ = equ_list[term.idx]
+            if isinstance(term.equ, list) or isinstance(term.equ, np.ndarray):
+                term.equ = np.array(term.equ)
+                for i, equ in enumerate(term.equ):
+                    if equ in main_terms:
+                        equ_idx = main_terms[equ]
+                        term.equ[i] = main_equs[equ_idx]
+            else:
+                if term.equ in main_terms:
+                    equ_idx = main_terms[term.equ]
+                    term.equ = main_equs[equ_idx]
+
 
     @classmethod
     def add_terms(cls, terms, name, termcase, topo, non_bonded, settings=None):
