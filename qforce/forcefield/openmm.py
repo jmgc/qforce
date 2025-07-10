@@ -767,14 +767,14 @@ class OpenMM(ForcefieldSettings):
         return a, b
 
     def write_lennard_jones_equation(self, add_combs=True):
-        if self.ff.n_excl == 1:
+        if self.ff.non_bonded.comb_rule == 1:
             eq = 'B/r12-A/r6; r12=r6*r6; r6=r^6'  # A: C6, B: C12
             if add_combs:
                 eq += '; A=sqrt(A1*A2); B=sqrt(B1*B2)'
         else:
             eq = '4*B*(A12/r12-A6/r6); r12=r6*r6; r6=r^6; A12=A6*A6; A6=A^6'  # A: sigma, B: epsilon
-            if add_combs and self.ff.n_excl == 2:
+            if add_combs and self.ff.non_bonded.comb_rule == 2:
                 eq += '; B=sqrt(B1*B2); A=(A1+A2)/2'
-            elif add_combs and self.ff.n_excl == 3:
+            elif add_combs and self.ff.non_bonded.comb_rule == 3:
                 eq += '; B=sqrt(B1*B2); A=sqrt(A1*A2)'
         return eq
