@@ -2,7 +2,7 @@ import os
 import shutil
 from io import StringIO
 from types import SimpleNamespace
-import pkg_resources
+from importlib import resources
 from colt import Colt
 from calkeeper import CalculationKeeper
 #
@@ -25,8 +25,8 @@ write_bash = True :: bool
 
     @classmethod
     def _set_config(cls, config):
-        output_software = config['ff']['output_software']
-        config.update({'terms': config['ff'][output_software]})
+        output_software = config["ff"]["output_software"]
+        config.update({"terms": config["ff"][output_software]})
         #
         config.update({key: SimpleNamespace(**val) for key, val in config.items()})
         return SimpleNamespace(**config)
@@ -39,11 +39,13 @@ write_bash = True :: bool
         questions.generate_block("addstructs", Computations_.colt_user_input)
         # ff terms
         for name, ffcls in ForceField.implemented_md_software.items():
-            questions.generate_block(name, ffcls.get_questions(), block='ff')
+            questions.generate_block(name, ffcls.get_questions(), block="ff")
         # calculator block
         questions.generate_block("calculators", "")
         for name, calculator in calculators.items():
-            questions.generate_block(name, calculator.colt_user_input, block='calculators')
+            questions.generate_block(
+                name, calculator.colt_user_input, block="calculators"
+            )
 
     @classmethod
     def from_config(cls, config):
@@ -51,10 +53,10 @@ write_bash = True :: bool
 
     @staticmethod
     def set_basis(value):
-        if value.endswith('**'):
-            return f'{value[:-2]}(D,P)'.upper()
-        if value.endswith('*'):
-            return f'{value[:-1]}(D)'.upper()
+        if value.endswith("**"):
+            return f"{value[:-2]}(D,P)".upper()
+        if value.endswith("*"):
+            return f"{value[:-1]}(D)".upper()
         return value.upper()
 
     @staticmethod
@@ -66,43 +68,44 @@ write_bash = True :: bool
 
 def _get_job_info(filename):
     job = {}
-    filename = filename.rstrip('/')
+    filename = filename.rstrip("/")
     base = os.path.basename(filename)
     path = os.path.dirname(filename)
-    if path != '':
-        path = f'{path}/'
+    if path != "":
+        path = f"{path}/"
 
     if os.path.isfile(filename):
-        job['coord_file'] = filename
-        job['name'] = base.split('.')[0]
+        job["coord_file"] = filename
+        job["name"] = base.split(".")[0]
     else:
-        job['coord_file'] = False
-        job['name'] = base.split('_qforce')[0]
+        job["coord_file"] = False
+        job["name"] = base.split("_qforce")[0]
 
-    job['dir'] = f'{path}{job["name"]}_qforce'
-    pathways = Pathways(job['dir'], name=job['name'])
-    job['pathways'] = pathways
+    job["dir"] = f'{path}{job["name"]}_qforce'
+    pathways = Pathways(job["dir"], name=job["name"])
+    job["pathways"] = pathways
     #
-    if job['coord_file'] is False:
-        init = pathways['init.xyz']
+    if job["coord_file"] is False:
+        init = pathways["init.xyz"]
         if init.exists():
-            job['coord_file'] = init
+            job["coord_file"] = init
         else:
-            preopt = pathways['preopt.xyz']
+            preopt = pathways["preopt.xyz"]
             if preopt.exists():
-                job['coord_file'] = preopt
+                job["coord_file"] = preopt
             else:
-                raise SystemExit(f"Either '{pathways['init.xyz']}' "
-                                 f"or '{pathways['preopt.xyz']}' need to be present")
+                raise SystemExit(
+                    f"Either '{pathways['init.xyz']}' "
+                    f"or '{pathways['preopt.xyz']}' need to be present"
+                )
 
     # Added calkeeper
-    job['logger'] = None
-    job['calculators'] = {}
-    job['calkeeper'] = CalculationKeeper()
-    job['Calculation'] = job['calkeeper'].get_calcls()
-    #
-    job['md_data'] = pkg_resources.resource_filename('qforce', 'data')
-    os.makedirs(job['dir'], exist_ok=True)
+    job["logger"] = None
+    job["calculators"] = {}
+    job["calkeeper"] = CalculationKeeper()
+    job["Calculation"] = job["calkeeper"].get_calcls()
+    job["md_data"] = resources.path("qforce", "data")
+    os.makedirs(job["dir"], exist_ok=True)
     return SimpleNamespace(**job)
 
 
@@ -112,11 +115,11 @@ def _check_and_copy_settings_file(pathways, config_file):
     If options are provided as StringIO, write that to job directory.
     """
 
-    settings_file = pathways['settings.ini']
+    settings_file = pathways["settings.ini"]
 
     if config_file is not None:
         if isinstance(config_file, StringIO):
-            with open(settings_file, 'w') as fh:
+            with open(settings_file, "w") as fh:
                 config_file.seek(0)
                 fh.write(config_file.read())
         else:
@@ -129,9 +132,13 @@ def initialize(filename, config_file, presets=None):
     job_info = _get_job_info(filename)
     settings_file = _check_and_copy_settings_file(job_info.pathways, config_file)
 
-    config = Initialize.from_questions(config=settings_file, presets=presets, check_only=True)
+    config = Initialize.from_questions(
+        config=settings_file, presets=presets, check_only=True
+    )
     # get calculators
     for key, Calculator in calculators.items():
-        job_info.calculators[key] = Calculator.from_config(getattr(config.calculators, key))
+        job_info.calculators[key] = Calculator.from_config(
+            getattr(config.calculators, key)
+        )
     job_info.logger = QForceLogger(config.logging.filename)
     return config, job_info
