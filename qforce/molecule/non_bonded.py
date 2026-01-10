@@ -521,7 +521,8 @@ def read_ext_nonbonded_file(config, md_data):
             lj_lib = config.lennard_jones[:-5]
         else:
             lj_lib = config.lennard_jones
-        lj_lib = f'{md_data}/{lj_lib}.itp'
+        with md_data as fspath:
+            lj_lib = os.path.join(fspath, f'{lj_lib}.itp')
 
     with open(lj_lib, 'r') as file:
         in_section = 'atomtypes'

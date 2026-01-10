@@ -68,7 +68,7 @@ write_bash = True :: bool
 
 def _get_job_info(filename):
     job = {}
-    filename = filename.rstrip("/")
+    filename = filename.rstrip(os.path.pathsep)
     base = os.path.basename(filename)
     path = os.path.dirname(filename)
     if path != "":

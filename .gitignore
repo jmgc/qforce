@@ -107,3 +107,5 @@ ENV/
 .mypy_cache/
 *.DS_Store
 .idea/
+
+water_test/

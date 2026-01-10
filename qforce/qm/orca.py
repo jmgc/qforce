@@ -337,11 +337,13 @@ class ReadORCA(ReadABC):
             base, ext = os.path.splitext(out_file)
             n_atoms, point_charges = self._read_orca_esp(f'{base}_charge.pc_chelpg')
         #
+        energy = self.sp(settings, out_file)
+        #
         n_atoms, elements, coords = self._read_orca_xyz(coord_file)
         charge = settings.charge
         multiplicity = settings.multiplicity
         b_orders = self._read_orca_bond_order(out_file, n_atoms)
-        return n_atoms, charge, multiplicity, elements, coords, hessian, b_orders, point_charges
+        return n_atoms, charge, multiplicity, elements, coords, energy, hessian, b_orders, point_charges
 
     def scan(self, settings, out_file, scan_file):
         """ Read data from the scan file.
