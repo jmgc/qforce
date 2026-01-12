@@ -2,7 +2,7 @@ import os
 import shutil
 from io import StringIO
 from types import SimpleNamespace
-import pkg_resources
+import importlib.resources as pkg_resources
 #
 from colt import Colt
 #
@@ -139,7 +139,7 @@ def _get_job_info(filename):
 
     job['dir'] = f'{path}{job["name"]}_qforce'
     job['frag_dir'] = f'{job["dir"]}/fragments'
-    job['md_data'] = pkg_resources.resource_filename('qforce', 'data')
+    job['md_data'] = pkg_resources.path('qforce', 'data')
     os.makedirs(job['dir'], exist_ok=True)
     return SimpleNamespace(**job)
 
