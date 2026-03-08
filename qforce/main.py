@@ -44,17 +44,24 @@ def run_qforce(input_arg, ext_q=None, ext_lj=None, config=None, presets=None):
         polarize(job, config.ff)
 
     qm = QM(job, config.qm)
+    
+    print(f'Readding QM Hessian for job: {job.name}')
     qm_hessian_out = qm.read_hessian()
 
+    print(f'Running Hessian fitting for job: {job.name}')
     mol = Molecule(config, job, qm_hessian_out, ext_q, ext_lj)
 
     md_hessian = fit_hessian(config.terms, mol, qm_hessian_out)
 
+    print(f'Running dihedral scan for job: {job.name}')
+    
     if len(mol.terms['dihedral/flexible']) > 0 and config.scan.do_scan:
         fragments = fragment(mol, qm, job, config)
         DihedralScan(fragments, mol, job, config)
 
+    print(f'Running frequency comparison for job: {job.name}')
     calc_qm_vs_md_frequencies(job, qm_hessian_out, md_hessian)
+    print(f'Calculating force field for job: {job.name}')
     ff = ForceField(job.name, config, mol, mol.topo.neighbors)
     ff.write_gromacs(job.dir, mol, qm_hessian_out.coords)
 
@@ -69,10 +76,17 @@ def run_hessian_fitting_for_external(job_dir, qm_data, ext_q=None, ext_lj=None,
 
     qm_hessian_out = HessianOutput(config.qm.vib_scaling, **qm_data)
 
+    print(f'Running Hessian fitting for job: {job.name}')
+    
     mol = Molecule(config, job, qm_hessian_out, ext_q, ext_lj)
 
     md_hessian = fit_hessian(config.terms, mol, qm_hessian_out)
+    
+    print(f'Running frequency comparison for job: {job.name}')
+    
     calc_qm_vs_md_frequencies(job, qm_hessian_out, md_hessian)
+
+    print(f'Calculating force field for job: {job.name}')
 
     ff = ForceField(job.name, config, mol, mol.topo.neighbors)
     ff.write_gromacs(job.dir, mol, qm_hessian_out.coords)

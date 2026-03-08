@@ -326,6 +326,9 @@ def determine_opls_atom_types(topo, q):
         elif elem == 9:
             a_type = 'opls_164'  # F
 
+        elif elem == 14:
+            a_type = 'Si'  # Si
+
         elif elem == 16:
             if neighs.count(elem=8, b_order_gt=1.25) == 1:
                 a_type = 'opls_496'  # SZ

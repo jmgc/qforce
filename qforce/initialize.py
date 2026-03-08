@@ -127,9 +127,6 @@ def _get_job_info(filename):
     filename = filename.rstrip('/')
     base = os.path.basename(filename)
     path = os.path.dirname(filename)
-    if path != '':
-        path = f'{path}/'
-
     if os.path.isfile(filename):
         job['coord_file'] = filename
         job['name'] = base.split('.')[0]
@@ -137,8 +134,8 @@ def _get_job_info(filename):
         job['coord_file'] = False
         job['name'] = base.split('_qforce')[0]
 
-    job['dir'] = f'{path}{job["name"]}_qforce'
-    job['frag_dir'] = f'{job["dir"]}/fragments'
+    job['dir'] = os.path.join(path, f'{job["name"]}_qforce')
+    job['frag_dir'] = os.path.join(job["dir"], "fragments")
     job['md_data'] = pkg_resources.path('qforce', 'data')
     os.makedirs(job['dir'], exist_ok=True)
     return SimpleNamespace(**job)

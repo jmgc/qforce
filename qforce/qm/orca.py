@@ -72,7 +72,7 @@ class WriteORCA(WriteABC):
         # ORCA uses MPI parallelization and a factor of 0.75 is used to
         # avoid ORCA using more than it is available.
         file.write('%maxcore  {}\n\n'.format(int(
-            config.memory / config.n_proc * 0.75)))
+            config.memory)))
 
         # Start compound job
         file.write('%Compound\n\n')
@@ -137,7 +137,7 @@ class WriteORCA(WriteABC):
         # ORCA uses MPI parallelization and a factor of 0.75 is used to
         # avoid ORCA using more than it is available.
         file.write('%maxcore  {}\n\n'.format(int(
-            config.memory / config.n_proc * 0.75)))
+            config.memory)))
 
         # Start compound job
         file.write('%Compound\n\n')
@@ -458,7 +458,7 @@ class ReadORCA(ReadABC):
             A list (length: n_atoms) of list (length: n_atoms) of float.
             representing the bond order between each atom pair.
         """
-        item_match = re.compile('^\(\s*(\d+)-\w{1,2}\s*,\s*(\d+)-\w{1,2}\s*\)\s*:\s*(-?\w.+)$')
+        item_match = re.compile(r'^\(\s*(\d+)-\w{1,2}\s*,\s*(\d+)-\w{1,2}\s*\)\s*:\s*(-?\w.+)$')
         b_orders = [[0, ] * n_atoms for _ in range(n_atoms)]
 
         with open(out_file, 'r') as file:
@@ -469,9 +469,11 @@ class ReadORCA(ReadABC):
     
             line = file.readline()
             while "-------" not in line:
-                items = line.split('B')
+                items = line.split('B(')
                 for item in items:
                     if item.strip():
+                        item = '(' + item
+                        print(item)
                         _m = re.match(item_match, item)
                         i = int(_m.group(1))
                         j = int(_m.group(2))
