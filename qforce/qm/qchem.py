@@ -60,18 +60,22 @@ class QChem(Colt):
 class ReadQChem(ReadABC):
     def hessian(self, config, out_file, fchk_file):
         b_orders, point_charges = [], []
-        n_atoms, charge, multiplicity, elements, coords, hessian = self._read_fchk_file(fchk_file)
+        n_atoms, charge, multiplicity, elements, coords, hessian = \
+            self._read_fchk_file(fchk_file)
 
         with open(out_file, "r", encoding='utf-8') as file:
             for line in file:
                 if "Charge Model 5" in line and config.charge_method == "cm5":
                     point_charges = self._read_cm5_charges(file, n_atoms)
-                elif "Merz-Kollman RESP Net Atomic" in line and config.charge_method == "resp":
+                elif ("Merz-Kollman RESP Net Atomic" in line and
+                      config.charge_method == "resp"):
                     point_charges = self._read_resp_charges(file, n_atoms)
                 if "N A T U R A L   B O N D   O R B I T A L" in line:
-                    b_orders = self._read_bond_order_from_nbo_analysis(file, n_atoms)
+                    b_orders = self._read_bond_order_from_nbo_analysis(
+                        file, n_atoms)
 
-        return n_atoms, charge, multiplicity, elements, coords, hessian, b_orders, point_charges
+        return (n_atoms, charge, multiplicity, elements, coords, hessian,
+                b_orders, point_charges)
 
     def scan(self, config, file_name):
         n_atoms, angles, energies, coords, point_charges = None, [], [], [], {}
@@ -102,9 +106,11 @@ class ReadQChem(ReadABC):
                     coords.append(coord)
 
                 elif "Charge Model 5" in line and found_n_atoms:
-                    point_charges['cm5'] = self._read_cm5_charges(file, n_atoms)
+                    point_charges['cm5'] = self._read_cm5_charges(
+                        file, n_atoms)
                 elif "Merz-Kollman RESP Net Atomic" in line and found_n_atoms:
-                    point_charges['resp'] = self._read_resp_charges(file, n_atoms)
+                    point_charges['resp'] = self._read_resp_charges(
+                        file, n_atoms)
 
         energies = np.array(energies) * Hartree * mol / kJ
         return n_atoms, coords, angles, energies, point_charges
@@ -137,15 +143,16 @@ class WriteQChem(WriteABC):
     scan_rem = {'jobtype': 'pes_scan', 'cm5': 'true', 'resp_charges': 'true'}
 
     def hessian(self, file, job_name, config, coords, atnums):
-        self._write_molecule(file, job_name, atnums, coords, config.charge, config.multiplicity)
+        self._write_molecule(file, job_name, atnums, coords,
+                             config.charge, config.multiplicity)
         self._write_job_setting(file, job_name, config, self.hess_opt_rem)
         file.write('\n\n@@@\n\n\n')
         file.write('$molecule\n  read\n$end\n\n')
         self._write_job_setting(file, job_name, config, self.hess_freq_rem)
         file.write('\n$nbo\n  nbo\n  bndidx\n$end\n\n')
 
-    def scan(self, file, job_name, config, coords, atnums, scanned_atoms, start_angle, charge,
-             multiplicity):
+    def scan(self, file, job_name, config, coords, atnums, scanned_atoms,
+             start_angle, charge, multiplicity):
 
         direct = [1, -1]
         if start_angle + config.scan_step_size > 180:
@@ -155,7 +162,8 @@ class WriteQChem(WriteABC):
         if not direct:
             sys.exit('ERROR: Your scan step size is too large to perform a scan.\n')
 
-        self._write_molecule(file, job_name, atnums, coords, charge, multiplicity)
+        self._write_molecule(file, job_name, atnums,
+                             coords, charge, multiplicity)
         self._write_job_setting(file, job_name, config, self.scan_rem)
         self._write_scan_info(file, scanned_atoms, start_angle, direct[0]*180,
                               direct[0]*config.scan_step_size)
@@ -190,7 +198,8 @@ class WriteQChem(WriteABC):
         file.write(f'  {charge} {multiplicity}\n')
         for atnum, coord in zip(atnums, coords):
             elem = ATOM_SYM[atnum]
-            file.write(f'{elem :>3s} {coord[0]:>12.6f} {coord[1]:>12.6f} {coord[2]:>12.6f}\n')
+            file.write(
+                f'{elem:>3s} {coord[0]:>12.6f} {coord[1]:>12.6f} {coord[2]:>12.6f}\n')
         file.write('$end\n\n')
 
     @staticmethod

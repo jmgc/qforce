@@ -34,7 +34,8 @@ class Orca(Colt):
 
     """
 
-    _method = ['qm_method_hessian', 'qm_method_opt', 'qm_method_charge', 'qm_method_sp']
+    _method = ['qm_method_hessian', 'qm_method_opt',
+               'qm_method_charge', 'qm_method_sp']
 
     def __init__(self):
         self.required_hessian_files = {'out_file': ['.out', '.log'],
@@ -152,7 +153,8 @@ class WriteORCA(WriteABC):
         file.write('New_Step\n')
         # PModel used for initial guess such that using XTB would not pose a
         # problem.
-        file.write(f"! {config.qm_method_charge} chelpg Hirshfeld PModel nopop\n")
+        file.write(
+            f"! {config.qm_method_charge} chelpg Hirshfeld PModel nopop\n")
         file.write(f'%base "{job_name}_charge"\n')
         file.write('STEP_END\n\n')
 
@@ -160,7 +162,8 @@ class WriteORCA(WriteABC):
         file.write('New_Step\n')
         file.write(f"! opt {config.qm_method_opt} nopop\n")
         file.write(f'%base "{job_name}_scan"\n')
-        self._write_scanned_atoms(file, scanned_atoms, start_angle, config.scan_step_size)
+        self._write_scanned_atoms(
+            file, scanned_atoms, start_angle, config.scan_step_size)
         file.write(f"*xyzfile {charge} {multiplicity} {job_name}_opt.xyz\n")
         file.write('STEP_END\n\n')
 
@@ -240,7 +243,8 @@ class WriteORCA(WriteABC):
         """
         for atnum, coord in zip(atnums, coords):
             elem = ATOM_SYM[atnum]
-            file.write(f'{elem :>3s} {coord[0]:>12.6f} {coord[1]:>12.6f} {coord[2]:>12.6f}\n')
+            file.write(
+                f'{elem:>3s} {coord[0]:>12.6f} {coord[1]:>12.6f} {coord[2]:>12.6f}\n')
 
 
 class ReadORCA(ReadABC):
@@ -458,7 +462,8 @@ class ReadORCA(ReadABC):
             A list (length: n_atoms) of list (length: n_atoms) of float.
             representing the bond order between each atom pair.
         """
-        item_match = re.compile(r'^\(\s*(\d+)-\w{1,2}\s*,\s*(\d+)-\w{1,2}\s*\)\s*:\s*(-?\w.+)$')
+        item_match = re.compile(
+            r'^\(\s*(\d+)-\w{1,2}\s*,\s*(\d+)-\w{1,2}\s*\)\s*:\s*(-?\w.+)$')
         b_orders = [[0, ] * n_atoms for _ in range(n_atoms)]
 
         with open(out_file, 'r') as file:
@@ -466,7 +471,7 @@ class ReadORCA(ReadABC):
             # Skip to the step after geometry optimisation
             while 'Mayer bond orders larger than' not in line:
                 line = file.readline()
-    
+
             line = file.readline()
             while "-------" not in line:
                 items = line.split('B(')
@@ -594,7 +599,8 @@ class ReadORCA(ReadABC):
             point_charges["esp"] = charges
         n_atoms, elements, coords = self._read_orca_allxyz(
             '{}_scan.allxyz'.format(base))
-        angles, energies = self._read_orca_dat('{}_scan.relaxscanact.dat'.format(base))
+        angles, energies = self._read_orca_dat(
+            '{}_scan.relaxscanact.dat'.format(base))
         if os.path.isfile('{}_sp.xyzact.dat'.format(base)):
             _, energies = self._read_orca_dat('{}_sp.xyzact.dat'.format(base))
         energies = np.array(energies) * Hartree * mol / kJ
